@@ -8,7 +8,7 @@ const onCopyButtonClick = () => {
         },
         tab => {
             chrome.cookies.getAll({ url: tab[0].url }, cookie => {
-                localStorage.copyCookieData = JSON.stringify(cookie);
+                localStorage.setItem('copyCookieData', JSON.stringify(cookie));
                 setTimeout(() => handlePopupUI('copy'), 100);
             });
         },
@@ -32,8 +32,8 @@ const removeOldCookies = (cookies, index, url, callback) => {
 const onPasteButtonClick = async () => {
     let copyCookieData;
     try {
-        copyCookieData = localStorage.copyCookieData
-            ? JSON.parse(localStorage.copyCookieData)
+        copyCookieData = localStorage.getItem('copyCookieData')
+            ? JSON.parse(localStorage.getItem('copyCookieData'))
             : null;
     } catch (e) {
         return alert('Error parsing cookies. Please try again.');
@@ -49,29 +49,34 @@ const onPasteButtonClick = async () => {
         {
             status: 'complete',
             windowId: chrome.windows.WINDOW_ID_CURRENT,
-            active: true,
+            // active: true,
         },
         tab => {
-            if (!tab?.[0]?.url) {
-                return alert('Uh-Oh! Tab with invalid URL.');
+            const targetTabs = tab.filter(({ url }) => url?.includes(domain));
+
+            if (targetTabs.length === 0) {
+                alert(`Can not find the tab with url included '${domain}', please open new tab with url '${domain}'`);
+                return false;
             }
 
-            chrome.cookies.getAll({ url: tab[0].url }, cookies => {
-                removeOldCookies(cookies, 0, tab[0].url, () => {
-                    copyCookieData.forEach(({ name, value, path }) => {
-                        try {
-                            chrome.cookies.set({
-                                url: tab[0].url,
-                                name,
-                                value,
-                                path,
-                                domain,
-                            });
-                        } catch (error) {
-                            console.error(`There was an error: ${error}`);
-                        }
+            targetTabs.forEach(({ url }) => {
+                chrome.cookies.getAll({ url }, cookies => {
+                    removeOldCookies(cookies, 0, url, () => {
+                        copyCookieData.forEach(({ name, value, path }) => {
+                            try {
+                                chrome.cookies.set({
+                                    url,
+                                    name,
+                                    value,
+                                    path,
+                                    domain,
+                                });
+                            } catch (error) {
+                                console.error(`There was an error: ${error}`);
+                            }
+                        });
+                        onResetButtonClick('paste');
                     });
-                    onResetButtonClick('paste');
                 });
             });
         },
@@ -85,7 +90,7 @@ const onResetButtonClick = action => {
 };
 
 const handlePopupUI = action => {
-    const copyCookieData = localStorage.copyCookieData;
+    const copyCookieData = localStorage.getItem('copyCookieData');
     const containerElement = document.getElementById('container');
     containerElement.setAttribute('class', '');
 
